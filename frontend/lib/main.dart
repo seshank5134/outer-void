@@ -59,6 +59,10 @@ class _MainInterfaceState extends State<MainInterface> {
   // AI Prediction & System State
   double mentalBattery = 100.0;
   double fatigueScore = 0.0;
+  // PRODUCTION_CONFIG: Use your Render/Railway URL here once deployed
+  static const String prodApiUrl =
+      'https://outer-void-backend.onrender.com/api/v1';
+  late String apiUrl;
   String burnoutTrajectory = "Analyzing...";
   String focusHalfLife = "Calculating...";
   String decisionQuality = "Assessing...";
@@ -86,6 +90,10 @@ class _MainInterfaceState extends State<MainInterface> {
   @override
   void initState() {
     super.initState();
+    // Default to local for dev, shift to prod or relative for web deploy
+    apiUrl = bool.fromEnvironment('dart.vm.product')
+        ? prodApiUrl
+        : 'http://127.0.0.1:8000/api/v1';
     _startAIPredictor();
     _syncModules();
   }
@@ -107,9 +115,7 @@ class _MainInterfaceState extends State<MainInterface> {
 
   Future<void> _fetchAIPrediction() async {
     try {
-      final res = await http.get(
-        Uri.parse('http://127.0.0.1:8000/api/v1/fatigue-score'),
-      );
+      final res = await http.get(Uri.parse('$apiUrl/fatigue-score'));
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         setState(() {
@@ -137,15 +143,9 @@ class _MainInterfaceState extends State<MainInterface> {
   Future<void> _syncModules() async {
     final dateStr = DateFormat('yyyy-MM-dd').format(_calendarDate);
     try {
-      final resH = await http.get(
-        Uri.parse('http://127.0.0.1:8000/api/v1/habits'),
-      );
-      final resL = await http.get(
-        Uri.parse('http://127.0.0.1:8000/api/v1/habit-logs/$dateStr'),
-      );
-      final resT = await http.get(
-        Uri.parse('http://127.0.0.1:8000/api/v1/tasks?date=$dateStr'),
-      );
+      final resH = await http.get(Uri.parse('$apiUrl/habits'));
+      final resL = await http.get(Uri.parse('$apiUrl/habit-logs/$dateStr'));
+      final resT = await http.get(Uri.parse('$apiUrl/tasks?date=$dateStr'));
 
       if (resH.statusCode == 200) habitRegistry = json.decode(resH.body);
       if (resL.statusCode == 200) {
@@ -162,7 +162,7 @@ class _MainInterfaceState extends State<MainInterface> {
   void _toggleHabit(int id, bool val) async {
     final dateStr = DateFormat('yyyy-MM-dd').format(_calendarDate);
     await http.post(
-      Uri.parse('http://127.0.0.1:8000/api/v1/habit-logs/$dateStr/$id'),
+      Uri.parse('$apiUrl/habit-logs/$dateStr/$id'),
       headers: {"Content-Type": "application/json"},
       body: json.encode({"status": val}),
     );
@@ -170,7 +170,7 @@ class _MainInterfaceState extends State<MainInterface> {
   }
 
   void _toggleTask(int id) async {
-    await http.post(Uri.parse('http://127.0.0.1:8000/api/v1/tasks/$id/toggle'));
+    await http.post(Uri.parse('$apiUrl/tasks/$id/toggle'));
     _syncModules();
   }
 
@@ -700,13 +700,25 @@ class _MainInterfaceState extends State<MainInterface> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'HABIT_SYNCHRONIZATION',
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 2,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'HABIT_SYNCHRONIZATION',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.add_circle_outline,
+                  color: Colors.redAccent,
+                ),
+                onPressed: _showHabitDialog,
+              ),
+            ],
           ),
           const SizedBox(height: 50),
           Row(
@@ -785,7 +797,19 @@ class _MainInterfaceState extends State<MainInterface> {
                   letterSpacing: 2,
                 ),
               ),
-              _dateSelector(),
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.add_box_outlined,
+                      color: Colors.redAccent,
+                    ),
+                    onPressed: _showTaskDialog,
+                  ),
+                  const SizedBox(width: 20),
+                  _dateSelector(),
+                ],
+              ),
             ],
           ),
           const SizedBox(height: 50),
@@ -1187,5 +1211,154 @@ class _MainInterfaceState extends State<MainInterface> {
     int m = s ~/ 60;
     int ss = s % 60;
     return '${m.toString().padLeft(2, '0')}:${ss.toString().padLeft(2, '0')}';
+  }
+
+  void _showHabitDialog() {
+    String name = "";
+    String selIcon = "circle";
+    String selColor = "0xFFF44336";
+    TimeOfDay selTime = const TimeOfDay(hour: 9, minute: 0);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('INITIALIZE_HABIT_PROTOCOL'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              onChanged: (v) => name = v,
+              decoration: const InputDecoration(hintText: "PROTOCOL_NAME"),
+            ),
+            const SizedBox(height: 15),
+            DropdownButton<String>(
+              value: selIcon,
+              isExpanded: true,
+              dropdownColor: Colors.black,
+              items: ["code", "water_drop", "self_improvement", "circle"]
+                  .map(
+                    (s) => DropdownMenuItem(
+                      value: s,
+                      child: Text(s.toUpperCase()),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (v) => setState(() => selIcon = v!),
+            ),
+            const SizedBox(height: 15),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent.withOpacity(0.1),
+                foregroundColor: Colors.redAccent,
+              ),
+              onPressed: () async {
+                final t = await showTimePicker(
+                  context: context,
+                  initialTime: selTime,
+                );
+                if (t != null) selTime = t;
+              },
+              child: const Text('SET_PULSE_TIME'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('ABORT', style: TextStyle(color: Colors.white24)),
+          ),
+          TextButton(
+            onPressed: () async {
+              await http.post(
+                Uri.parse('$apiUrl/habits'),
+                headers: {"Content-Type": "application/json"},
+                body: json.encode({
+                  "name": name,
+                  "icon": selIcon,
+                  "color": selColor,
+                  "reminder": "${selTime.hour}:${selTime.minute}",
+                }),
+              );
+              _syncModules();
+              Navigator.pop(ctx);
+            },
+            child: const Text(
+              'SYNC_TO_CLOUD',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTaskDialog() {
+    String name = "";
+    String notes = "";
+    TimeOfDay? reminder;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('INITIALIZE_TASK_BUCKET'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              onChanged: (v) => name = v,
+              decoration: const InputDecoration(hintText: "TASK_ID"),
+            ),
+            const SizedBox(height: 15),
+            TextField(
+              onChanged: (v) => notes = v,
+              decoration: const InputDecoration(hintText: "LOG_METADATA"),
+            ),
+            const SizedBox(height: 15),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent.withOpacity(0.1),
+                foregroundColor: Colors.redAccent,
+              ),
+              onPressed: () async {
+                final t = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.now(),
+                );
+                if (t != null) reminder = t;
+              },
+              child: const Text('SCHEDULE_NOTIFICATION'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('ABORT', style: TextStyle(color: Colors.white24)),
+          ),
+          TextButton(
+            onPressed: () async {
+              await http.post(
+                Uri.parse('$apiUrl/tasks'),
+                headers: {"Content-Type": "application/json"},
+                body: json.encode({
+                  "name": name,
+                  "date": DateFormat('yyyy-MM-dd').format(_calendarDate),
+                  "reminders": reminder != null
+                      ? ["${reminder!.hour}:${reminder!.minute}"]
+                      : [],
+                  "notes": notes,
+                }),
+              );
+              _syncModules();
+              Navigator.pop(ctx);
+            },
+            child: const Text(
+              'DEPLOY',
+              style: TextStyle(color: Colors.redAccent),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+venv/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+
+# Flutter / Dart
+.dart_tool/
+.idea/
+.metadata
+build/
+*.iml
+*.log
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# Specific mobile/desktop folders (if you want to keep them, remove these, but usually they are large and generated)
+# android/
+# ios/
+# linux/
+# macos/
+# windows/
+
+# Misc
+.DS_Store
+node_modules/
+dist/

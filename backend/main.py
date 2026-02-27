@@ -13,9 +13,15 @@ activity_monitor = ActivityMonitor()
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
-    activity_monitor.start()
+    try:
+        activity_monitor.start()
+    except Exception as e:
+        print(f"Operational Notice: Activity Monitor (Hardware Feed) disabled on this environment: {e}")
     yield
-    activity_monitor.stop()
+    try:
+        activity_monitor.stop()
+    except:
+        pass
 
 app = FastAPI(title="VOID OS: Control Center API", lifespan=lifespan)
 
@@ -76,4 +82,6 @@ def toggle_task(task_id: int):
     return model.toggle_task_completion(task_id)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    import os
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

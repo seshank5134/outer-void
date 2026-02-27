@@ -2,3 +2,5 @@ fastapi
 uvicorn
 pynput
 psutil
+gunicorn
+python-multipart

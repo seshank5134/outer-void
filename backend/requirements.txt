@@ -4,3 +4,8 @@ pynput
 psutil
 gunicorn
 python-multipart
+sqlalchemy
+passlib[bcrypt]
+python-jose[cryptography]
+pydantic
+pydantic[email]

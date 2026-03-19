@@ -43,21 +43,20 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="VOID OS: Control Center API", lifespan=lifespan)
 
+# --- 1. CORS MIDDLEWARE (MUST BE AT TOP) ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
+
 @app.get("/")
 def read_root():
     return {"message": "VOID OS API is Online", "status": "active"}
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "https://outer-void.netlify.app",
-        "http://localhost:3000",
-        "http://localhost:8000",
-    ],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 # ==================== AUTH ROUTES ====================

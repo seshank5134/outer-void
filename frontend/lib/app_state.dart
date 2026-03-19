@@ -56,7 +56,7 @@ final List<ThemePreset> kThemePresets = [
 // ─────────────────────────────────────────────
 class AppState extends ChangeNotifier {
   // Config
-  static const String defaultApiUrl = 'http://172.18.117.105:8000/api/v1';
+  static const String defaultApiUrl = 'https://981f57a139dae4.lhr.life/api/v1';
   String apiUrl = defaultApiUrl;
 
   // Auth

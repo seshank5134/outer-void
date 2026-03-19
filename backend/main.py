@@ -43,6 +43,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="VOID OS: Control Center API", lifespan=lifespan)
 
+@app.get("/")
+def read_root():
+    return {"message": "VOID OS API is Online", "status": "active"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

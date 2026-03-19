@@ -56,7 +56,8 @@ final List<ThemePreset> kThemePresets = [
 // ─────────────────────────────────────────────
 class AppState extends ChangeNotifier {
   // Config
-  static const String defaultApiUrl = 'http://localhost:8000/api/v1';
+  static const String defaultApiUrl =
+      'https://outer-void-backend-production.up.railway.app/api/v1';
   String apiUrl = defaultApiUrl;
 
   // Auth

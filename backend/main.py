@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Body, Query, Depends, HTTPException, status
+from fastapi import FastAPI, Body, Query, Depends, HTTPException, status, Request
 from fastapi.responses import StreamingResponse, Response
 import asyncio
 from fastapi.middleware.cors import CORSMiddleware
@@ -131,24 +131,33 @@ def get_status(current_user: User = Depends(get_current_user)):
 
 # ==================== WEBCAM FEED ====================
 
-async def video_stream():
-    while True:
-        frame = webcam_monitor.get_frame()
-        if frame:
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-        await asyncio.sleep(0.05)
-
-@app.get("/api/v1/video_feed")
-async def video_feed():
-    return StreamingResponse(video_stream(), media_type="multipart/x-mixed-replace; boundary=frame")
+@app.post("/api/v1/process_frame")
+async def process_frame(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Receive frame from frontend, process it for AI fatigue score."""
+    try:
+        data = await request.body()
+        import numpy as np
+        import cv2
+        nparr = np.frombuffer(data, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if img is not None:
+            # We use the WebcamMonitor logic to process the frame
+            processed, results = webcam_monitor.process_frame(img)
+            return {"status": "success", "analysis": results}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+    
+    return {"status": "error", "message": "Invalid frame"}
 
 @app.get("/api/v1/camera_frame")
-def camera_frame():
-    frame = webcam_monitor.get_frame()
-    if not frame:
-        raise HTTPException(status_code=404, detail="No frame available")
-    return Response(content=frame, media_type="image/jpeg")
+def get_camera_frame():
+    # Deprecated fallback
+    return Response(content=b"", media_type="image/jpeg")
 
 
 # ==================== PREFERENCES ====================

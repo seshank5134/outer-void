@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:camera/camera.dart';
 
 import 'app_state.dart';
 import 'widgets.dart';
@@ -71,9 +72,6 @@ class VoidOSApp extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════
-//  Main Shell  — sidebar + content
-// ═══════════════════════════════════════════════
 class MainShell extends StatefulWidget {
   final AppState state;
   const MainShell({super.key, required this.state});
@@ -201,9 +199,6 @@ class _MainShellState extends State<MainShell> {
       ];
 }
 
-// ═══════════════════════════════════════════════
-//  Sidebar  (desktop/tablet)
-// ═══════════════════════════════════════════════
 class _Sidebar extends StatelessWidget {
   final AppState state;
   final int activeIndex;
@@ -248,8 +243,6 @@ class _Sidebar extends StatelessWidget {
       child: Column(
         children: [
           const SizedBox(height: 52),
-
-          // Logo
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 28),
             child: Row(
@@ -281,15 +274,13 @@ class _Sidebar extends StatelessWidget {
               ],
             ),
           ),
-
-          // Username
           if (s.user?['username'] != null) ...[
             const SizedBox(height: 8),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28),
               child: Row(
                 children: [
-                  const SizedBox(width: 36 + 12), // align with text
+                  const SizedBox(width: 36 + 12),
                   Text(
                     '@${s.user!['username']}',
                     style: GoogleFonts.inter(
@@ -301,15 +292,9 @@ class _Sidebar extends StatelessWidget {
               ),
             ),
           ],
-
           const SizedBox(height: 48),
-
-          // Nav items
           ...List.generate(_navItems.length, (i) => _navItem(i, s)),
-
           const Spacer(),
-
-          // ML Vision Feed
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: Column(
@@ -342,13 +327,8 @@ class _Sidebar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-
-          // System pulse
           _systemPulse(s),
-
-          // Settings
           _navSettingsItem(s),
-
           const SizedBox(height: 24),
         ],
       ),
@@ -377,11 +357,8 @@ class _Sidebar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                Icon(
-                  item.icon,
-                  size: 18,
-                  color: active ? s.accent : Colors.white24,
-                ),
+                Icon(item.icon,
+                    size: 18, color: active ? s.accent : Colors.white24),
                 const SizedBox(width: 16),
                 Text(
                   item.label,
@@ -432,11 +409,8 @@ class _Sidebar extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                Icon(
-                  Icons.tune,
-                  size: 18,
-                  color: settingsOpen ? s.accent : Colors.white24,
-                ),
+                Icon(Icons.tune,
+                    size: 18, color: settingsOpen ? s.accent : Colors.white24),
                 const SizedBox(width: 16),
                 Text(
                   'CONTROL PANEL',
@@ -486,9 +460,6 @@ class _Sidebar extends StatelessWidget {
   }
 }
 
-// ═══════════════════════════════════════════════
-//  Bottom Nav  (mobile)
-// ═══════════════════════════════════════════════
 class _BottomNav extends StatelessWidget {
   final AppState state;
   final int activeIndex;
@@ -536,10 +507,8 @@ class _BottomNav extends StatelessWidget {
               onTap: () => onSelect(e.key),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color:
@@ -548,11 +517,8 @@ class _BottomNav extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      e.value.icon,
-                      color: active ? s.accent : Colors.white24,
-                      size: 20,
-                    ),
+                    Icon(e.value.icon,
+                        color: active ? s.accent : Colors.white24, size: 20),
                     const SizedBox(height: 4),
                     Text(
                       e.value.label,
@@ -575,11 +541,9 @@ class _BottomNav extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.tune,
-                    color: settingsOpen ? s.accent : Colors.white24,
-                    size: 20,
-                  ),
+                  Icon(Icons.tune,
+                      color: settingsOpen ? s.accent : Colors.white24,
+                      size: 20),
                   const SizedBox(height: 4),
                   Text(
                     'SETTINGS',
@@ -605,48 +569,74 @@ class _BottomNav extends StatelessWidget {
 // ═══════════════════════════════════════════════
 class MLVisionFeedPlayer extends StatefulWidget {
   final String apiUrl;
-  const MLVisionFeedPlayer({required this.apiUrl});
+  const MLVisionFeedPlayer({super.key, required this.apiUrl});
 
   @override
   State<MLVisionFeedPlayer> createState() => _MLVisionFeedPlayerState();
 }
 
 class _MLVisionFeedPlayerState extends State<MLVisionFeedPlayer> {
-  Timer? _timer;
-  int _timestamp = 0;
+  CameraController? _controller;
+  bool _initialized = false;
+  Timer? _analysisTimer;
 
   @override
   void initState() {
     super.initState();
-    _startFeed();
+    _initCamera();
   }
 
-  void _startFeed() {
-    // Poll the single camera frame endpoint rapidly
-    _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
-      setState(() {
-        _timestamp = DateTime.now().millisecondsSinceEpoch;
-      });
+  Future<void> _initCamera() async {
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) return;
+      _controller = CameraController(
+        cameras.first,
+        ResolutionPreset.low,
+        enableAudio: false,
+      );
+      await _controller!.initialize();
+      if (mounted) {
+        setState(() => _initialized = true);
+        _startAnalysis();
+      }
+    } catch (e) {
+      debugPrint("Camera check failed: $e");
+    }
+  }
+
+  void _startAnalysis() {
+    _analysisTimer = Timer.periodic(const Duration(seconds: 2), (_) async {
+      if (_controller == null || !_controller!.value.isInitialized) return;
+      try {
+        final XFile image = await _controller!.takePicture();
+        final bytes = await image.readAsBytes();
+        await http.post(
+          Uri.parse('${widget.apiUrl}/process_frame'),
+          headers: {'Content-Type': 'application/octet-stream'},
+          body: bytes,
+        );
+      } catch (_) {}
     });
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    _analysisTimer?.cancel();
+    _controller?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_timestamp == 0) return const Center(child: CircularProgressIndicator());
-
-    return Image.network(
-      '${widget.apiUrl}/camera_frame?t=$_timestamp',
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      errorBuilder: (c, e, s) => const Center(
+    if (_controller == null || !_initialized) {
+      return const Center(
         child: Icon(Icons.videocam_off, color: Colors.white24, size: 24),
-      ),
+      );
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: CameraPreview(_controller!),
     );
   }
 }

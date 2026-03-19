@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -308,6 +309,40 @@ class _Sidebar extends StatelessWidget {
 
           const Spacer(),
 
+          // ML Vision Feed
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ML VISION FEED',
+                  style: GoogleFonts.inter(
+                    fontSize: 8 * s.uiFontScale,
+                    color: Colors.white24,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: s.accent.withOpacity(0.3)),
+                      borderRadius: BorderRadius.circular(12),
+                      color: Colors.black26,
+                    ),
+                    height: 120,
+                    width: double.infinity,
+                    child: MLVisionFeedPlayer(apiUrl: s.apiUrl),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // System pulse
           _systemPulse(s),
 
@@ -560,6 +595,57 @@ class _BottomNav extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  ML Vision Feed Player (Web Safe)
+// ═══════════════════════════════════════════════
+class MLVisionFeedPlayer extends StatefulWidget {
+  final String apiUrl;
+  const MLVisionFeedPlayer({required this.apiUrl});
+
+  @override
+  State<MLVisionFeedPlayer> createState() => _MLVisionFeedPlayerState();
+}
+
+class _MLVisionFeedPlayerState extends State<MLVisionFeedPlayer> {
+  Timer? _timer;
+  int _timestamp = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _startFeed();
+  }
+
+  void _startFeed() {
+    // Poll the single camera frame endpoint rapidly
+    _timer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      setState(() {
+        _timestamp = DateTime.now().millisecondsSinceEpoch;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_timestamp == 0) return const Center(child: CircularProgressIndicator());
+
+    return Image.network(
+      '${widget.apiUrl}/camera_frame?t=$_timestamp',
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      errorBuilder: (c, e, s) => const Center(
+        child: Icon(Icons.videocam_off, color: Colors.white24, size: 24),
       ),
     );
   }

@@ -1,4 +1,6 @@
 from fastapi import FastAPI, Body, Query, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse, Response
+import asyncio
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 import uvicorn
@@ -13,12 +15,14 @@ from auth import (
     get_password_hash, create_access_token, authenticate_user,
     get_current_user, get_user_by_email, get_user_by_username
 )
-from ml_pipeline import MockFatigueModel
+from ml_pipeline import UnifiedFatigueModel
 from monitor.keyboard_mouse import ActivityMonitor
+from monitor.webcam_monitor import WebcamMonitor
 
-model = MockFatigueModel()
-model.train([])
+model = UnifiedFatigueModel()
+model.train([]) # We'll replace this with real training path soon
 activity_monitor = ActivityMonitor()
+webcam_monitor = WebcamMonitor()
 
 
 @contextlib.asynccontextmanager
@@ -26,11 +30,13 @@ async def lifespan(app: FastAPI):
     init_db()
     try:
         activity_monitor.start()
+        webcam_monitor.start()
     except Exception as e:
-        print(f"Notice: Activity Monitor disabled: {e}")
+        print(f"Notice: Monitor disabled: {e}")
     yield
     try:
         activity_monitor.stop()
+        webcam_monitor.stop()
     except:
         pass
 
@@ -107,9 +113,35 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @app.get("/api/v1/fatigue-score")
 def get_status(current_user: User = Depends(get_current_user)):
-    metrics = activity_monitor.get_metrics()
-    prediction = model.predict(metrics)
+    # Combine metrics from both sensors
+    kb_metrics = activity_monitor.get_metrics()
+    cam_metrics = webcam_monitor.get_metrics()
+    
+    combined_metrics = {**kb_metrics, **cam_metrics}
+    prediction = model.predict(combined_metrics)
     return prediction
+
+
+# ==================== WEBCAM FEED ====================
+
+async def video_stream():
+    while True:
+        frame = webcam_monitor.get_frame()
+        if frame:
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+        await asyncio.sleep(0.05)
+
+@app.get("/api/v1/video_feed")
+async def video_feed():
+    return StreamingResponse(video_stream(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+@app.get("/api/v1/camera_frame")
+def camera_frame():
+    frame = webcam_monitor.get_frame()
+    if not frame:
+        raise HTTPException(status_code=404, detail="No frame available")
+    return Response(content=frame, media_type="image/jpeg")
 
 
 # ==================== PREFERENCES ====================

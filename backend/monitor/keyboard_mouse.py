@@ -1,6 +1,11 @@
 import time
 import threading
-from pynput import keyboard, mouse
+
+try:
+    from pynput import keyboard, mouse
+    PYNPUT_AVAILABLE = True
+except Exception:
+    PYNPUT_AVAILABLE = False
 
 class ActivityMonitor:
     def __init__(self):
@@ -28,6 +33,9 @@ class ActivityMonitor:
                 self.click_count += 1
 
     def start(self):
+        if not PYNPUT_AVAILABLE:
+            print("Notice: pynput unavailable (headless server) — keyboard/mouse monitoring disabled.")
+            return
         self.is_monitoring = True
         self.kb_listener = keyboard.Listener(on_press=self.on_press)
         self.mouse_listener = mouse.Listener(on_move=self.on_move, on_click=self.on_click)
@@ -37,6 +45,8 @@ class ActivityMonitor:
         print("Monitoring started...")
 
     def stop(self):
+        if not PYNPUT_AVAILABLE or not self.is_monitoring:
+            return
         self.is_monitoring = False
         self.kb_listener.stop()
         self.mouse_listener.stop()

@@ -1,8 +1,11 @@
 import random
 import time
 from datetime import datetime, timedelta
+import os
+import pickle
+import numpy as np
 
-class MockFatigueModel:
+class UnifiedFatigueModel:
     def __init__(self):
         self.is_trained = False
         self.current_score = 45.0 
@@ -49,19 +52,66 @@ class MockFatigueModel:
         return None
 
     # --- ADVANCED AI PREDICTION ENGINE ---
-    def train(self, historical_data): self.is_trained = True
-
+    def train(self, historical_data): 
+        # In modern workflow, models are trained via train_models.py
+        # and loaded here via joblib.
+        self.is_trained = True
+        
+        # Load keyboard model (trained on Kaggle-like dataset)
+        try:
+            with open('fatigue_kb_model.pkl', 'rb') as f:
+                model_data = pickle.load(f)
+                self.kb_theta = model_data.get('theta')
+            self.has_kb_model = True
+        except FileNotFoundError:
+            self.has_kb_model = False
+            
     def predict(self, current_metrics):
         ks = current_metrics.get("keystrokes", 0)
         clicks = current_metrics.get("mouse_clicks", 0)
         bs = current_metrics.get("backspaces", 0)
         
-        # Heuristic Fatigue Calculation
-        if ks == 0 and clicks == 0:
-            self.current_score -= 1.2 
-        else:
-            self.current_score += (ks * 0.08) + (clicks * 0.15) + (bs * 1.8)
+        # WEBCAM METRICS
+        face_visible = current_metrics.get("face_visible", False)
+        is_drowsy = current_metrics.get("is_drowsy", False)
+        blinks = current_metrics.get("blinks", 0)
+        yawns = current_metrics.get("yawns", 0)
+        head_nodding = current_metrics.get("head_nodding", False)
+
+        # 1. Base Score Calculation (ML or Heuristic)
+        if self.has_kb_model and hasattr(self, 'kb_theta'):
+            # Use ML model predictions based on analytical regression
+            x = np.array([
+                1, # Intercept
+                ks * 12, # keystrokes_per_min
+                clicks * 12, # mouse_clicks_per_min
+                bs * 12, # backspaces_per_min
+                random.uniform(0.1, 0.5) # variance
+            ])
+            # Model returns fatigue score 0-100
+            ml_pred = x.dot(self.kb_theta)
             
+            # Smooth transition
+            self.current_score = (self.current_score * 0.8) + (ml_pred * 0.2)
+        else:
+            # Fallback heuristic
+            if ks == 0 and clicks == 0:
+                self.current_score -= 1.2 
+            else:
+                self.current_score += (ks * 0.08) + (clicks * 0.15) + (bs * 1.8)
+
+        # 2. Integrate Computer Vision (Roboflow Drowsiness Logic)
+        if face_visible:
+            if is_drowsy:
+                self.current_score += 15.0 # Huge penalty for closed eyes
+            if yawns > 0:
+                self.current_score += (yawns * 8.0)
+            if head_nodding:
+                self.current_score += 10.0
+            
+            if not is_drowsy and yawns == 0 and not head_nodding and blinks > 0:
+                self.current_score -= 0.5 # Slow recovery if awake and active
+                
         self.current_score = max(0.0, min(100.0, self.current_score))
         mental_battery = round(100.0 - self.current_score, 1)
         
@@ -75,7 +125,22 @@ class MockFatigueModel:
         # 3. Focus Half-Life (minutes)
         half_life = max(5, int((mental_battery / 100) * 120))
         # 4. Neural Activity Feed
-        activity_intensity = "High" if (ks + clicks) > 20 else ("Medium" if (ks + clicks) > 5 else "Idle")
+        if face_visible:
+            if is_drowsy or yawns > 0 or head_nodding:
+                activity_intensity = "CV: Drowsy/Fatigued"
+            elif blinks > 5:
+                activity_intensity = "CV: Active/Alert"
+            else:
+                activity_intensity = "CV: Focused"
+        else:
+            activity_intensity = "High" if (ks + clicks) > 20 else ("Medium" if (ks + clicks) > 5 else "Idle")
+
+        # Create diagnostic label for frontend
+        if not face_visible:
+            diag = "KB/Mouse Tracking"
+        else:
+            diag = f"CV Active (EAR: {current_metrics.get('ear', 0):.2f}) | KB Tracking"
+
         
         # 5. Recovery Time Estimator
         recovery_mins = round((100 - mental_battery) / 1.5)
@@ -105,6 +170,7 @@ class MockFatigueModel:
             "recovery_estimate": f"{recovery_mins} Mins to Full Utility",
             "ai_recommendation": rec,
             "neural_activity": activity_intensity,
+            "diagnostic_info": diag,
             "adaptive_pomodoro": {"work_mins": pom_work, "break_mins": pom_break, "status": pom_status},
             "task_completion": task_completion_rate,
             "streak_stability": 14, # Mocked

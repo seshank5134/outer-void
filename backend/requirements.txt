@@ -1,6 +1,5 @@
 fastapi
-uvicorn
-pynput
+uvicorn[standard]
 psutil
 gunicorn
 python-multipart
@@ -9,3 +8,6 @@ passlib[bcrypt]
 python-jose[cryptography]
 pydantic
 pydantic[email]
+opencv-python-headless
+numpy
+scikit-learn

@@ -4,10 +4,10 @@ psutil
 gunicorn
 python-multipart
 sqlalchemy
-passlib[bcrypt]
 python-jose[cryptography]
 pydantic
 pydantic[email]
 opencv-python-headless
 numpy
 scikit-learn
+bcrypt
